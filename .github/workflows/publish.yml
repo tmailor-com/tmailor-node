@@ -54,4 +54,9 @@ jobs:
       - uses: actions/download-artifact@v5
         with:
           name: package
+      # First release only: the package does not exist yet, so trusted publishing cannot be configured; a one-use
+      # granular token (environment secret NPM_TOKEN) publishes 0.1.0. Afterwards: configure the trusted publisher on
+      # npmjs.com, delete the token and this secret (npm then authenticates with OIDC through id-token: write).
       - run: npm publish ./tmailor-*.tgz --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
