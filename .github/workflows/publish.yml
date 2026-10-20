@@ -57,6 +57,16 @@ jobs:
       # First release only: the package does not exist yet, so trusted publishing cannot be configured; a one-use
       # granular token (environment secret NPM_TOKEN) publishes 0.1.0. Afterwards: configure the trusted publisher on
       # npmjs.com, delete the token and this secret (npm then authenticates with OIDC through id-token: write).
-      - run: npm publish ./tmailor-*.tgz --provenance --access public
+      # On failure the npm error lines go to an annotation (readable without signing in); npm never prints the token.
+      - name: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set +e
+          echo "::notice::npm $(npm --version), auth: $(npm whoami 2>/dev/null || echo 'none (OIDC or missing token)')"
+          npm publish ./tmailor-*.tgz --provenance --access public > publish.log 2>&1; rc=$?
+          cat publish.log
+          if [ $rc -ne 0 ]; then
+            echo "::error::$(grep -E '^npm (error|ERR!)' publish.log | head -n 12 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          fi
+          exit $rc
