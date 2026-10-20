@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-20)
 
 First version, for Open API spec 1.3.0. Port of the Python SDK 0.2.0 with the same object model and behaviour; it
 passes all 83 shared conformance scenarios.
