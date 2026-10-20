@@ -6,15 +6,15 @@ the exact HTTP requests the SDK must send, canned responses to return, and what 
 
 The Python runner is `../python/tests/conformance_runner.py`; port it first when you start a new SDK.
 
-## Scenarios (80 files)
+## Scenarios (83 files)
 
 - Auth and keys: `auth_account_locked`, `auth_invalid_key`, `auth_ip_not_allowed`, `auth_key_revoked`, `auth_missing_key`
 - Health: `health_degraded_503`, `health_ok`, `health_without_key`
-- Account (`me`, `domains`, `usage`): `domains_ok`, `me_ok`, `me_without_key`, `usage_default`, `usage_invalid_field`, `usage_range`
+- Account (`me`, `domains`, `usage`): `domains_ok`, `me_missing_ip_allowlist_enforced`, `me_ok`, `me_without_key`, `usage_default`, `usage_invalid_field`, `usage_range`
 - Create and list addresses: `mailboxes_create_customnamenotallowed`, `mailboxes_create_empty_body`, `mailboxes_create_explicit_idempotency_key`, `mailboxes_create_idempotency_conflict`, `mailboxes_create_invalid_name_reason`, `mailboxes_create_invaliddomain`, `mailboxes_create_mailbox_exists`, `mailboxes_create_name_used_on_website`, `mailboxes_create_max_retries_zero`, `mailboxes_create_network_error_retry`, `mailboxes_create_no_domain_exhausts_retries`, `mailboxes_create_own_domain`, `mailboxes_create_quota_exceeded`, `mailboxes_create_random`, `mailboxes_create_retry_429_same_key`, `mailboxes_create_retry_503_idempotency_unavailable`, `mailboxes_list_cursor_repeat`, `mailboxes_list_empty`, `mailboxes_list_limit`, `mailboxes_list_null_tokens`, `mailboxes_list_pagination`
-- One address: `mailbox_clear`, `mailbox_delete`, `mailbox_delete_cache_unavailable`, `mailbox_delete_message`, `mailbox_delete_message_429_retried`, `mailbox_delete_twice`, `mailbox_info`, `mailbox_info_invalid_type`, `mailbox_info_not_found`, `mailbox_info_retry_500`, `mailbox_message_body_unavailable`, `mailbox_message_not_found`, `mailbox_message_read`, `mailbox_message_read_seen_false`, `mailbox_message_server_otp_null`, `mailbox_messages_cursor_cycle`, `mailbox_messages_default`, `mailbox_messages_filters_pagination`, `mailbox_messages_item_missing_id`, `mailbox_messages_seen_not_boolean`
+- One address: `mailbox_clear`, `mailbox_delete`, `mailbox_delete_redirect_is_error`, `mailbox_delete_cache_unavailable`, `mailbox_delete_message`, `mailbox_delete_message_429_retried`, `mailbox_delete_twice`, `mailbox_info`, `mailbox_info_invalid_type`, `mailbox_info_not_found`, `mailbox_info_retry_500`, `mailbox_message_body_unavailable`, `mailbox_message_not_found`, `mailbox_message_read`, `mailbox_message_read_seen_false`, `mailbox_message_server_otp_null`, `mailbox_messages_cursor_cycle`, `mailbox_messages_default`, `mailbox_messages_filters_pagination`, `mailbox_messages_item_missing_id`, `mailbox_messages_seen_not_boolean`
 - wait_for_message: `wait_for_message_429_inside_wait`, `wait_for_message_baseline_cursor_repeat`, `wait_for_message_baseline_unfiltered`, `wait_for_message_fixed_interval`, `wait_for_message_new_only`, `wait_for_message_rate_limit_slowdown`, `wait_for_message_retry_after_beyond_deadline`, `wait_for_message_retry_after_zero`, `wait_for_message_since`, `wait_for_message_since_same_second`, `wait_for_message_slow_final_read`, `wait_for_message_slow_poll_deadline`, `wait_for_message_timeout`, `wait_for_message_timeout_zero`
-- Transport, retries and errors: `connect_error_retried_any`, `daily_cap_not_retried`, `gateway_error_non_json`, `internal_error_get_retried`, `rate_limited_exhausts_retries`, `rate_limited_retry_after_too_long`, `rate_limited_retry_after_zero`, `read_error_unsafe_not_retried`, `success_body_not_json`, `timeout_safe_retried_then_raised`, `unknown_error_code`
+- Transport, retries and errors: `connect_error_retried_any`, `daily_cap_not_retried`, `gateway_error_non_json`, `internal_error_get_retried`, `rate_limited_exhausts_retries`, `rate_limited_retry_after_too_long`, `rate_limited_retry_after_zero`, `read_error_unsafe_not_retried`, `redirect_3xx_is_error`, `success_body_not_json`, `timeout_safe_retried_then_raised`, `unknown_error_code`
 
 Removed on 2026-10-17 with their endpoints: `domain_check_*`, `mailbox_rotate_*`, `mailbox_mark_seen*`.
 
@@ -80,7 +80,7 @@ query string.
   `mailbox.messages`) the result is the full array the iterator produced.
 - `error`: the call must fail with
   - `class`: neutral class name, mapped by each SDK (Python: `MailboxNotFound` -> `MailboxNotFoundError`,
-    `InvalidResponse` -> `InvalidResponseError`,
+    `InvalidResponse` -> `InvalidResponseError`, `APIError` (any other HTTP error, e.g. a 3xx) -> `APIError`,
     `BadRequest` -> `BadRequestError`, `ServiceUnavailable` -> `ServiceUnavailableError`,
     `InternalServerError`, `ConnectionError` -> `APIConnectionError`, `Timeout` -> `APITimeoutError`,
     `WaitTimeout` -> `WaitTimeoutError`; the class must be a subclass of the SDK's root error);

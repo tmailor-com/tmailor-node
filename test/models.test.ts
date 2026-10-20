@@ -133,3 +133,32 @@ test("client turns schema errors into InvalidResponseError (status kept)", async
   const { client } = testClient([json(201, {})]);
   await assert.rejects(client.mailboxes.create(), (e: unknown) => e instanceof InvalidResponseError && e.status === 201);
 });
+
+// Review 20b NODE-01: ip_allowlist_enforced is required in spec 1.3.0 (boolean, never coerced).
+test("Me.ipAllowlistEnforced is read strictly", () => {
+  assert.equal(Me.fromApi(ME_OK).ipAllowlistEnforced, true);
+  assert.equal(Me.fromApi({ ...ME_OK, ip_allowlist_enforced: false }).ipAllowlistEnforced, false);
+  for (const v of [DROP, null, "true", 1, 0]) {
+    assert.throws(() => Me.fromApi(bad(ME_OK, ["ip_allowlist_enforced"], v)), (e: unknown) => {
+      assert.ok(e instanceof SchemaError && e.message.includes("ip_allowlist_enforced"), String(e));
+      return true;
+    });
+  }
+});
+
+// Review 20b NODE-02: an integer outside the safe range was rounded by JSON.parse, so it is not trusted.
+test("integers must be safe integers", () => {
+  const max = JSON.stringify(ME_OK).replace('"user_id":12', `"user_id":${Number.MAX_SAFE_INTEGER}`);
+  assert.equal(Me.fromApi(parseStrictJson(max)).userId, Number.MAX_SAFE_INTEGER);
+  for (const big of ["9007199254740992", "9007199254740993", "-9007199254740993", "1e400"]) {
+    const text = JSON.stringify(ME_OK).replace('"user_id":12', `"user_id":${big}`);
+    assert.throws(() => Me.fromApi(parseStrictJson(text)), /user_id must be an integer/, big);
+  }
+  assert.throws(() => parseMailboxFields(mailboxBody(TOKEN, { created_at: 2 ** 60 })), /created_at must be an integer/);
+});
+
+test("client: an unsafe integer in a 2xx body is InvalidResponseError", async () => {
+  const text = JSON.stringify(mailboxBody(TOKEN)).replace('"created_at":1760342400', '"created_at":17603424000000000000');
+  const { client } = testClient([new Response(text, { status: 200, headers: { "Content-Type": "application/json" } })]);
+  await assert.rejects(client.mailbox(TOKEN).info(), (e: unknown) => e instanceof InvalidResponseError && e.status === 200);
+});

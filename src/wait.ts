@@ -10,7 +10,7 @@
  * @internal
  */
 
-import { MIN_RETRY_AFTER, type RateLimitInfo } from "./core.js";
+import { MIN_RETRY_AFTER, checkDuration, type RateLimitInfo } from "./core.js";
 
 export const FIRST_POLL = 1_000;
 export const GROWTH = 1.5;
@@ -28,10 +28,9 @@ export class WaitPlan {
   interval: number;
 
   constructor(timeout: number, pollInterval: number | null | undefined, now: number) {
-    if (typeof timeout !== "number" || Number.isNaN(timeout) || timeout < 0) throw new RangeError("timeout must be >= 0");
-    if (pollInterval !== undefined && pollInterval !== null && (typeof pollInterval !== "number" || !(pollInterval > 0))) {
-      throw new RangeError("pollInterval must be > 0");
-    }
+    // Review 20b NODE-04: finite milliseconds only (Infinity would never time out or would hit setTimeout's 1 ms fallback).
+    checkDuration("timeout", timeout);
+    if (pollInterval !== undefined && pollInterval !== null) checkDuration("pollInterval", pollInterval, true);
     this.deadline = now + timeout;
     this.fixed = pollInterval !== undefined && pollInterval !== null;
     this.interval = this.fixed ? Math.max(MIN_POLL, pollInterval as number) : FIRST_POLL;

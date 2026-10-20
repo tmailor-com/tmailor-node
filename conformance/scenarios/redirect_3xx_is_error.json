@@ -1,0 +1,39 @@
+{
+  "id": "redirect_3xx_is_error",
+  "description": "Only 2xx is success. A 302 (never followed: the Authorization header must not go to another host) is an APIError with code HTTP302 and is not retried.",
+  "call": {
+    "op": "me"
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/me",
+        "headers": {
+          "Authorization": "Bearer tmk_live_c0nf0rmance01_TESTSECRETdoNotUseAnywhere0000000000000",
+          "User-Agent": {
+            "$regex": "^tmailor-[a-z0-9]+/\\d+\\.\\d+\\.\\d+"
+          }
+        },
+        "query": {},
+        "json": null
+      },
+      "response": {
+        "status": 302,
+        "headers": {
+          "Location": "https://evil.example/v1/me",
+          "Content-Type": "text/html"
+        },
+        "body": ""
+      }
+    }
+  ],
+  "expect": {
+    "error": {
+      "class": "APIError",
+      "code": "HTTP302",
+      "status": 302
+    },
+    "sleeps": []
+  }
+}

@@ -36,7 +36,9 @@ function get(d: JsonObject, key: string, path: string): unknown {
 }
 
 function isInt(holder: object, key: string, v: unknown): v is number {
-  return typeof v === "number" && Number.isInteger(v) && !isFloatKey(holder, key);
+  // Review 20b NODE-02: JSON.parse rounds integers beyond 2^53 - 1 silently, so only safe integers are accepted
+  // (an out-of-range value would no longer be the number the server sent).
+  return typeof v === "number" && Number.isSafeInteger(v) && !isFloatKey(holder, key);
 }
 
 export function reqObj(d: JsonObject, key: string, path: string): JsonObject {
@@ -62,7 +64,7 @@ export function reqStrOrNull(d: JsonObject, key: string, path: string): string |
 
 export function reqInt(d: JsonObject, key: string, path: string): number {
   const v = get(d, key, path);
-  if (!isInt(d, key, v)) throw new SchemaError(`${path}.${key} must be an integer`);
+  if (!isInt(d, key, v)) throw new SchemaError(`${path}.${key} must be an integer (within +/-(2^53 - 1))`);
   return v;
 }
 

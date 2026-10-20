@@ -4,6 +4,8 @@ import { test } from "node:test";
 
 import {
   APIConnectionError,
+  APIError,
+  Client,
   DailyCapReachedError,
   InternalServerError,
   RateLimitedError,
@@ -13,7 +15,7 @@ import {
   type Mailbox,
 } from "../src/index.js";
 import { CacheUnavailableError } from "../src/errors.js";
-import { backoff, retryDelay, withinDeadline, requestTimeout, RateLimitInfo } from "../src/core.js";
+import { MAX_TIMER_DELAY, backoff, chunkedTimeout, retryDelay, withinDeadline, requestTimeout, RateLimitInfo } from "../src/core.js";
 import * as ops from "../src/ops.js";
 import { WaitPlan } from "../src/wait.js";
 import { TOKEN, json, mailboxBody, testClient } from "./helpers.js";
@@ -143,4 +145,74 @@ test("a 5xx on an unsafe request is not retried", async () => {
 test("a bug in a custom fetch is re-thrown, not turned into a network error", async () => {
   const { client } = testClient([new RangeError("bug in my fetch wrapper")]);
   await assert.rejects(client.me(), RangeError);
+});
+
+// Review 20b NODE-03: only 2xx is success; a 3xx is an APIError (HTTP3xx), not retried, also for void operations.
+test("3xx is an error, never followed and never retried", async () => {
+  for (const [status, run] of [
+    [302, (c: Client) => c.me()],
+    [301, (c: Client) => c.mailbox(TOKEN).delete()],
+    [307, (c: Client) => c.mailbox(TOKEN).deleteMessage("m1")],
+    [308, (c: Client) => c.mailboxes.create()],
+  ] as const) {
+    const { client, sent, clock } = testClient([
+      new Response("", { status, headers: { Location: "https://evil.example/x", "X-Request-Id": "rid-3xx" } }),
+    ]);
+    await assert.rejects(run(client), (e: unknown) => {
+      assert.ok(e instanceof APIError, String(e));
+      assert.equal(e.constructor, APIError);
+      assert.equal(e.code, `HTTP${status}`);
+      assert.equal(e.status, status);
+      assert.equal(e.requestId, "rid-3xx");
+      return true;
+    });
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0]?.init.redirect, "manual");
+    assert.deepEqual(clock.sleeps, []);
+  }
+  const ok = testClient([new Response(null, { status: 204 })]);
+  await ok.client.mailbox(TOKEN).delete(); // 204 is still a success
+});
+
+// Review 20b NODE-04: durations must be finite; long timers are armed in chunks of at most 2^31 - 1 ms.
+test("durations: Infinity and NaN are refused", async () => {
+  const base = { apiKey: "k", baseUrl: "https://x.test", allowUntrustedBaseUrl: true, fetch: async (): Promise<never> => {
+    throw new Error("no request");
+  } };
+  for (const bad of [Infinity, -Infinity, Number.NaN]) {
+    assert.throws(() => new Client({ ...base, timeout: bad }), RangeError);
+    assert.throws(() => new Client({ ...base, maxRetryWait: bad }), RangeError);
+    assert.throws(() => new WaitPlan(bad, null, 0), RangeError);
+    assert.throws(() => new WaitPlan(1000, bad, 0), RangeError);
+  }
+  const c = new Client({ ...base, timeout: MAX_TIMER_DELAY * 3, maxRetryWait: MAX_TIMER_DELAY * 2 });
+  assert.equal(c.timeout, MAX_TIMER_DELAY * 3);
+  await assert.rejects(c.mailbox(TOKEN).waitForMessage({ timeout: Infinity }), RangeError);
+  await assert.rejects(c.mailbox(TOKEN).waitForMessage({ timeout: 1000, pollInterval: Infinity }), RangeError);
+});
+
+test("chunkedTimeout re-arms setTimeout in steps of at most 2^31 - 1 ms", () => {
+  const calls: number[] = [];
+  const pending: Array<() => void> = [];
+  const set = (cb: () => void, delay: number): unknown => {
+    calls.push(delay);
+    pending.push(cb);
+    return calls.length;
+  };
+  let fired = 0;
+  chunkedTimeout(() => (fired += 1), MAX_TIMER_DELAY * 2 + 5, set, () => undefined);
+  while (pending.length) (pending.shift() as () => void)();
+  assert.deepEqual(calls, [MAX_TIMER_DELAY, MAX_TIMER_DELAY, 5]);
+  assert.equal(fired, 1);
+  calls.length = 0;
+  chunkedTimeout(() => (fired += 1), 1500, set, () => undefined);
+  assert.deepEqual(calls, [1500]);
+  // Cancel between chunks: the callback never runs.
+  calls.length = 0;
+  pending.length = 0;
+  const t = chunkedTimeout(() => (fired += 100), MAX_TIMER_DELAY + 1, set, () => undefined);
+  t.cancel();
+  while (pending.length) (pending.shift() as () => void)();
+  assert.deepEqual(calls, [MAX_TIMER_DELAY]);
+  assert.equal(fired, 1);
 });

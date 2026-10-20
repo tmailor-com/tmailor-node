@@ -96,6 +96,11 @@ export class Me {
   readonly clientIp!: string;
   readonly limits!: Limits;
   readonly ipAllowlist!: string[];
+  /**
+   * Review 20b NODE-01: whether `ipAllowlist` is applied to your requests. `false` while a paid plan is active
+   * (requests are accepted from any IP), `true` on the Free plan only. Required in spec 1.3.0.
+   */
+  readonly ipAllowlistEnforced!: boolean;
   readonly subscriptions!: Subscription[];
   declare readonly raw: Record<string, unknown>;
 
@@ -116,6 +121,7 @@ export class Me {
         clientIp: S.reqStr(d, "client_ip", "$"),
         limits: parseLimits(S.reqObj(d, "limits", "$"), "$.limits"),
         ipAllowlist: S.reqStrList(d, "ip_allowlist", "$"),
+        ipAllowlistEnforced: S.reqBool(d, "ip_allowlist_enforced", "$"), // Review 20b NODE-01
         subscriptions: S.reqList(d, "subscriptions", "$").map((s, i) => parseSubscription(s, `$.subscriptions[${i}]`)),
       },
       { ...d },

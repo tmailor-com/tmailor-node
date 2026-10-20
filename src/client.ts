@@ -6,6 +6,7 @@ import {
   RateLimitInfo,
   baseHeaders,
   buildError,
+  checkDuration,
   checkCursor,
   maskKey,
   maskToken,
@@ -165,14 +166,11 @@ export class Client {
     // A missing key is reported by the first call that needs it, not here (health() is public).
     this.#apiKey = resolveApiKey(options.apiKey);
     this.baseUrl = resolveBaseUrl(options.baseUrl, options.allowUntrustedBaseUrl ?? false);
-    const timeout = options.timeout ?? DEFAULT_TIMEOUT;
-    if (typeof timeout !== "number" || !(timeout > 0)) throw new RangeError("timeout must be > 0 (milliseconds)");
+    // Review 20b NODE-04: durations must be finite (Infinity would reach setTimeout and fire after 1 ms).
+    const timeout = checkDuration("timeout", options.timeout ?? DEFAULT_TIMEOUT, true);
     const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
     if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new RangeError("maxRetries must be an integer >= 0");
-    const maxRetryWait = options.maxRetryWait ?? DEFAULT_MAX_RETRY_WAIT;
-    if (typeof maxRetryWait !== "number" || Number.isNaN(maxRetryWait) || maxRetryWait < 0) {
-      throw new RangeError("maxRetryWait must be >= 0 (milliseconds)");
-    }
+    const maxRetryWait = checkDuration("maxRetryWait", options.maxRetryWait ?? DEFAULT_MAX_RETRY_WAIT);
     this.timeout = timeout;
     this.maxRetries = maxRetries;
     this.maxRetryWait = maxRetryWait;
@@ -253,7 +251,9 @@ export class Client {
         if (pastDeadline(this.clock.now(), deadline)) throw new WaitTimeoutError();
         const rl = RateLimitInfo.fromHeaders(out.res.headers);
         if (rl !== null) this.lastRateLimit = rl;
-        if (out.res.status < 400) return { data: parseJson(out.res), res: out.res };
+        // Review 20b NODE-03: only 2xx is success. Redirects are never followed (redirect: "manual", the Authorization
+        // header must not go to another host), so a 3xx is an APIError (code HTTP3xx), never a silent success.
+        if (out.res.status >= 200 && out.res.status < 300) return { data: parseJson(out.res), res: out.res };
         err = buildError(out.res);
       } else {
         if (out.timedOut && (deadlineBound || pastDeadline(this.clock.now(), deadline))) throw new WaitTimeoutError();

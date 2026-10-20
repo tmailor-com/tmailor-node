@@ -52,7 +52,8 @@
               "quota": 3000,
               "used": 120
             }
-          ]
+          ],
+          "ip_allowlist_enforced": true
         }
       }
     }
@@ -85,7 +86,8 @@
           "quota": 3000,
           "used": 120
         }
-      ]
+      ],
+      "ip_allowlist_enforced": true
     },
     "rate_limit": {
       "limit": 120,

@@ -74,6 +74,7 @@ export const ME_OK = {
     max_ip: 1,
   },
   ip_allowlist: ["192.0.2.10"],
+  ip_allowlist_enforced: true,
   subscriptions: [{ plan: "free", expires_at: 0, period_end: 1760400000, quota: 100, used: 1 }],
 };
 

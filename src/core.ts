@@ -53,17 +53,75 @@ export interface Clock {
   clearTimeout(handle: unknown): void;
 }
 
+/**
+ * Review 20b NODE-04: the longest delay `setTimeout` accepts (2^31 - 1 ms, about 24.8 days). Node turns a larger or
+ * non-finite delay into 1 ms, so longer timers are armed in chunks of at most this length.
+ */
+export const MAX_TIMER_DELAY = 2_147_483_647;
+
+/** A timer handle that survives re-arming (see {@link chunkedTimeout}). @internal */
+export interface ChunkedTimer {
+  current: unknown;
+  cancelled: boolean;
+}
+
+/**
+ * Review 20b NODE-04: run `fn` after `ms`, re-arming `set` in chunks of at most {@link MAX_TIMER_DELAY}.
+ * `set`/`clear` are parameters so the chunking can be tested without waiting. @internal
+ */
+export function chunkedTimeout(
+  fn: () => void,
+  ms: number,
+  set: (cb: () => void, delay: number) => unknown,
+  clear: (h: unknown) => void,
+): { handle: ChunkedTimer; cancel: () => void } {
+  const handle: ChunkedTimer = { current: undefined, cancelled: false };
+  let left = Number.isFinite(ms) ? Math.max(0, ms) : MAX_TIMER_DELAY; // callers pass finite values; never 1 ms
+  const arm = (): void => {
+    if (handle.cancelled) return;
+    const step = Math.min(left, MAX_TIMER_DELAY);
+    left -= step;
+    handle.current = set(left > 0 ? arm : fn, step);
+  };
+  arm();
+  return {
+    handle,
+    cancel: () => {
+      handle.cancelled = true;
+      clear(handle.current);
+    },
+  };
+}
+
+function nodeSet(cb: () => void, delay: number): unknown {
+  return setTimeout(cb, delay);
+}
+
+function nodeSetUnref(cb: () => void, delay: number): unknown {
+  const t = setTimeout(cb, delay);
+  (t as { unref?: () => void }).unref?.();
+  return t;
+}
+
+function nodeClear(h: unknown): void {
+  clearTimeout(h as ReturnType<typeof setTimeout>);
+}
+
 export const realClock: Clock = {
   now: () => performance.now(),
   wallNow: () => Date.now(),
-  sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms))),
-  setTimeout: (fn, ms) => {
-    const t = setTimeout(fn, Math.max(0, ms));
-    (t as { unref?: () => void }).unref?.();
-    return t;
-  },
-  clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+  sleep: (ms) => new Promise<void>((resolve) => void chunkedTimeout(resolve, ms, nodeSet, nodeClear)),
+  setTimeout: (fn, ms) => chunkedTimeout(fn, ms, nodeSetUnref, nodeClear),
+  clearTimeout: (h) => (h as { cancel?: () => void } | undefined)?.cancel?.(),
 };
+
+/** Review 20b NODE-04: a duration option must be a finite number of milliseconds (>= 0, or > 0 when `positive`). */
+export function checkDuration(name: string, v: unknown, positive = false): number {
+  if (typeof v !== "number" || !Number.isFinite(v) || (positive ? !(v > 0) : v < 0)) {
+    throw new RangeError(`${name} must be a finite number of milliseconds ${positive ? "> 0" : ">= 0"}`);
+  }
+  return v;
+}
 
 // ── API key
 
@@ -323,7 +381,8 @@ export function intHeader(headers: HeaderMap, name: string): number | null {
   if (v === undefined) return null;
   const s = v.trim();
   if (!/^[+-]?\d+$/.test(s)) return null;
-  return parseInt(s, 10);
+  const n = parseInt(s, 10);
+  return Number.isSafeInteger(n) ? n : null; // Review 20b NODE-02: no silently rounded value
 }
 
 /** Retry-After in seconds: header first, then `error.retry_after`; negative values become 0. */
@@ -331,7 +390,7 @@ export function retryAfterSeconds(headers: HeaderMap, bodyError: Record<string, 
   let v = intHeader(headers, "retry-after");
   if (v === null) {
     const ra = bodyError["retry_after"];
-    if (typeof ra === "number" && Number.isInteger(ra)) v = ra;
+    if (typeof ra === "number" && Number.isSafeInteger(ra)) v = ra; // Review 20b NODE-02
   }
   if (v !== null && v < 0) v = 0;
   return v;
@@ -347,6 +406,14 @@ const KEEP_ERROR_HEADERS = new Set([
 ]);
 
 const REASONS: Record<number, string> = {
+  // Review 20b NODE-03: a 3xx is an error too ("HTTP 302 Found").
+  300: "Multiple Choices",
+  301: "Moved Permanently",
+  302: "Found",
+  303: "See Other",
+  304: "Not Modified",
+  307: "Temporary Redirect",
+  308: "Permanent Redirect",
   400: "Bad Request",
   401: "Unauthorized",
   402: "Payment Required",

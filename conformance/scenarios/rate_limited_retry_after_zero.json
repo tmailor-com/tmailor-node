@@ -76,14 +76,16 @@
           "ip_allowlist": [
             "203.0.113.10"
           ],
-          "subscriptions": []
+          "subscriptions": [],
+          "ip_allowlist_enforced": true
         }
       }
     }
   ],
   "expect": {
     "result": {
-      "user_id": 1
+      "user_id": 1,
+      "ip_allowlist_enforced": true
     },
     "sleeps": [
       1

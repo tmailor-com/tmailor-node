@@ -15,7 +15,7 @@ import * as T from "../src/index.js";
 import type { Clock, FetchInitLike, FetchLike, FetchResponseLike } from "../src/index.js";
 
 /** Number of scenario files shipped with this SDK version; a smaller count means fixtures were lost. */
-export const EXPECTED_SCENARIOS = 80;
+export const EXPECTED_SCENARIOS = 83; // Review 20b: +3 (ip_allowlist_enforced, 3xx)
 export const DEFAULT_KEY = "tmk_live_c0nf0rmance01_TESTSECRETdoNotUseAnywhere0000000000000";
 export const BASE_URL = "https://open-api.test";
 
@@ -80,6 +80,7 @@ export const ERROR_CLASSES: Record<string, new (...args: never[]) => T.TmailorEr
   ConnectionError: T.APIConnectionError,
   Timeout: T.APITimeoutError,
   WaitTimeout: T.WaitTimeoutError,
+  APIError: T.APIError, // Review 20b: any other HTTP error (for example a 3xx)
 };
 
 /** Fake time in milliseconds: sleeps and slow responses advance it; timers fire when it passes them. */

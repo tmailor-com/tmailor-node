@@ -3,7 +3,7 @@
 ## 0.1.0 (unreleased)
 
 First version, for Open API spec 1.3.0. Port of the Python SDK 0.2.0 with the same object model and behaviour; it
-passes all 80 shared conformance scenarios.
+passes all 83 shared conformance scenarios.
 
 - `Client`: `health()` (public, sent without the key), `me()`, `domains()`, `usage({ from, to })`,
   `mailboxes.create/list/listPage`, `mailbox(token)` (no request), `lastRateLimit`.
@@ -23,4 +23,9 @@ passes all 80 shared conformance scenarios.
   `allowUntrustedBaseUrl: true`.
 - The API key and address tokens never appear in `util.inspect`, `JSON.stringify`, `String()` or error output.
 - Durations are milliseconds (`timeout`, `maxRetryWait`, `pollInterval`); `since` and API timestamps are Unix seconds.
+- Review 20b (before release): `Me.ipAllowlistEnforced` (required `ip_allowlist_enforced`, spec 1.3.0); only 2xx
+  is success, a 3xx is an `APIError` with code `HTTP3xx` and is not retried (also for `delete()` and other calls
+  without a result); integers outside the safe range (beyond 2^53 - 1) are an `InvalidResponseError`; `timeout`,
+  `maxRetryWait`, `pollInterval` and the wait `timeout` must be finite, and timers longer than 2^31 - 1 ms are armed
+  in steps (Node would otherwise fire them after 1 ms). Conformance scenarios synced with the Python SDK (83 files).
 - ESM and CommonJS builds with type declarations; no runtime dependencies; Node.js 18 or later.

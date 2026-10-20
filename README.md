@@ -13,7 +13,7 @@ pipelines, and inbox automation.
 - No runtime dependencies: it uses the built-in `fetch` and `AbortController`.
 - Promise-based API; pagination with `for await`.
 - Typed errors, idempotent address creation, automatic retries, and rate-limit-aware polling.
-- Same behaviour as the [Python SDK](https://github.com/tmailor-com/tmailor-python): both pass the same shared
+- Same behaviour as the [Python SDK](https://github.com/tmailor-com/tmailor-python): both pass the same 83 shared
   conformance scenarios. Built for Open API spec 1.3.0.
 - [API reference](https://platform.tmailor.com/docs)
 
@@ -60,7 +60,8 @@ await box.delete();
 ```
 
 **Units.** Durations you pass to the SDK (`timeout`, `maxRetryWait`, `pollInterval`, the wait `timeout`) are
-**milliseconds**, like `setTimeout`. Values that come from the API stay as the API sends them: timestamps
+**milliseconds**, like `setTimeout`. They must be finite numbers: `Infinity` or `NaN` throws a `RangeError`. Delays
+longer than `setTimeout`'s limit (2^31 - 1 ms, about 24.8 days) are allowed and are timed in several steps. Values that come from the API stay as the API sends them: timestamps
 (`createdAt`, `receivedAt`, `RateLimitInfo.reset`) are Unix **seconds**, and so are `since` (a number of seconds,
 or a `Date`) and `err.retryAfter`.
 
@@ -188,6 +189,10 @@ subject), and `since` (Unix time in seconds, or a `Date`; **exclusive**: only me
 (1 to 100) sets the page size. Messages are kept for 24 hours. If the API ever returns a pagination cursor it
 has already returned, the iterators stop with `InvalidResponseError` instead of looping.
 
+Response bodies are checked strictly: a missing field, a wrong JSON type (`"1"` or `1.0` for an integer, `"false"`
+for a boolean) or an integer outside JavaScript's safe range (beyond 2^53 - 1, which `JSON.parse` would round) is
+an `InvalidResponseError`.
+
 ### Waiting for a message
 
 ```ts
@@ -236,12 +241,15 @@ the same applies to a server older than 1.3.0. Always handle `null`.
 ## Account
 
 ```ts
-const me = await client.me(); // userId, limits (quotaTotal, ratePerMin, dailyReqCap, ...), ipAllowlist, subscriptions
+const me = await client.me(); // userId, limits (quotaTotal, ratePerMin, dailyReqCap, ...), ipAllowlist, ipAllowlistEnforced, subscriptions
 const doms = await client.domains(); // your own domains (iterable) + doms.sharedDomainsAvailable
 const usage = await client.usage({ from: "2026-10-01", to: "2026-10-17" }); // daily counters
 await client.health(); // public status: no key needed and none is sent
 client.lastRateLimit; // RateLimitInfo { limit, remaining, reset } of the last response
 ```
+
+`me.ipAllowlistEnforced` tells whether `me.ipAllowlist` is applied to your requests: `false` while a paid plan is
+active (requests are accepted from any IP), `true` on the Free plan only.
 
 Every model keeps the JSON object it was read from in a non-enumerable `raw` property, so a field added to the
 API later is reachable before the SDK knows it.
@@ -265,7 +273,7 @@ message text. Include `requestId` when contacting support.
 | 429 | `RateLimitError`: `RateLimitedError`, `DailyCapReachedError` |
 | 500, other 5xx | `InternalServerError`, unless a more specific error code applies |
 | 503 | `ServiceUnavailableError`: `NoDomainAvailableError`, `IdempotencyUnavailableError`, `CacheUnavailableError` (`.secretChanged`); `InternalServerError` (`InternalError`, reason `cache_hold_failed`); a degraded `health()` (code `HTTP503`) |
-| other 4xx | `APIError` |
+| 3xx, other 4xx | `APIError` (code `HTTP<status>`). Only 2xx is success: redirects are never followed (your key must not reach another host) and are not retried |
 | 2xx | `InvalidResponseError` (`InvalidResponse`): body not JSON, a field missing or of the wrong type, or a repeated pagination cursor. The body is never kept in the error |
 | none | `MissingKeyError` (no API key configured), `APIConnectionError` (`ConnectionError`), `APITimeoutError` (`Timeout`): no HTTP response |
 | none | `WaitTimeoutError` (`WaitTimeout`, from `waitForMessage`) |

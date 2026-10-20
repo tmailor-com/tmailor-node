@@ -82,14 +82,16 @@
               "quota": 3000,
               "used": 120
             }
-          ]
+          ],
+          "ip_allowlist_enforced": true
         }
       }
     }
   ],
   "expect": {
     "result": {
-      "user_id": 123456
+      "user_id": 123456,
+      "ip_allowlist_enforced": true
     },
     "sleep_count": 1
   }
