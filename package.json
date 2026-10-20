@@ -1,0 +1,71 @@
+{
+  "name": "tmailor",
+  "version": "0.1.0",
+  "description": "Node.js SDK for the Tmailor Open API: create temporary email addresses and read their messages (OTP, sign-up and email tests).",
+  "keywords": [
+    "tmailor",
+    "temporary email",
+    "temp mail",
+    "disposable email",
+    "email testing",
+    "otp",
+    "e2e",
+    "playwright",
+    "cypress"
+  ],
+  "homepage": "https://github.com/tmailor-com/tmailor-node#readme",
+  "bugs": {
+    "url": "https://github.com/tmailor-com/tmailor-node/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tmailor-com/tmailor-node.git"
+  },
+  "license": "MIT",
+  "author": "Tmailor",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/esm/**/*.js",
+    "dist/esm/**/*.d.ts",
+    "dist/cjs/**/*.js",
+    "dist/cjs/**/*.d.ts",
+    "dist/cjs/package.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "node scripts/clean.mjs dist && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:test": "node scripts/clean.mjs .test-build && tsc -p tsconfig.test.json",
+    "test": "npm run build:test && node scripts/run-tests.mjs",
+    "test:conformance": "npm run build:test && node scripts/run-tests.mjs conformance",
+    "test:live": "npm run build:test && node scripts/run-tests.mjs --live",
+    "prepublishOnly": "npm run build && npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "~20.19.43",
+    "typescript": "~5.9.3"
+  }
+}

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["18", "20", "22"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test  # offline: unit, local transport and the shared conformance scenarios (live tests are opt-in)
+
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Packed files load as ESM and CommonJS
+        run: |
+          npm pack
+          mkdir /tmp/consumer && cd /tmp/consumer && npm init -y >/dev/null
+          npm install "$GITHUB_WORKSPACE"/tmailor-*.tgz
+          node -e "const t = require('tmailor'); if (typeof t.Client !== 'function') process.exit(1)"
+          node --input-type=module -e "import { Client, VERSION } from 'tmailor'; if (typeof Client !== 'function') process.exit(1); console.log(VERSION)"
